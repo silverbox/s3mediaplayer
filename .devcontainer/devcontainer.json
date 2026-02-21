@@ -1,10 +1,6 @@
 {
   "name": "s3mediaplayer-dev",
-  "image": "mcr.microsoft.com/vscode/devcontainers/javascript-node:0-20",
-  "features": {
-    "aws-cli": "latest",
-    "docker-in-docker": "latest"
-  },
-  "postCreateCommand": "cd frontend && npm install && cd ../cdk && npm install",
-  "workspaceFolder": "/workspace"
+  "build": {
+    "dockerfile": "../Dockerfile"
+  }
 }
