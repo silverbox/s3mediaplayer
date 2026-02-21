@@ -78,8 +78,11 @@ export class CdkStack extends cdk.Stack {
 
     // Policy to allow object operations only within the user's folder
     authenticatedRole.addToPolicy(new iam.PolicyStatement({
-      actions: ['s3:GetObject', 's3:PutObject', 's3:DeleteObject'],
-      resources: [this.bucket.bucketArn + '/${cognito-identity.amazonaws.com:sub}/*'],
+      actions: ['s3:GetObject', 's3:PutObject', 's3:DeleteObject', 's3:List*', 's3:GetBucketLocation'],
+      resources: [
+        this.bucket.bucketArn + '/${cognito-identity.amazonaws.com:sub}',
+        this.bucket.bucketArn + '/${cognito-identity.amazonaws.com:sub}/*'
+      ]
     }));
 
     // attach the role to the identity pool
@@ -111,6 +114,8 @@ export class CdkStack extends cdk.Stack {
         code: lambda.Code.fromAsset('lambda/list'),
         environment: {
           BUCKET: this.bucket.bucketName,
+          IDENTITY_POOL_ID: identityPool.ref,
+          USER_POOL_ID: this.userPool.userPoolId,
           VID: lambdaVersionKey
         },
         layers: [awsSdkLayer],
@@ -142,7 +147,6 @@ export class CdkStack extends cdk.Stack {
       });
     }
 
-    // Outputs for front-end configuration
     // Outputs for front-end configuration
     new cdk.CfnOutput(this, 'UserPoolId', { value: this.userPool.userPoolId });
     new cdk.CfnOutput(this, 'UserPoolClientId', { value: this.userPoolClient.userPoolClientId });

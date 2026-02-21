@@ -28,6 +28,25 @@
   color: #61dafb;
 }
 
+/* make file buttons look like links */
+.file-button {
+  background: none;
+  border: none;
+  color: #61dafb;
+  cursor: pointer;
+  padding: 0;
+  font: inherit;
+  text-decoration: underline;
+}
+
+.file-button:hover {
+  color: #21a1f1;
+}
+
+.audio-player {
+  margin-top: 1rem;
+}
+
 @keyframes App-logo-spin {
   from {
     transform: rotate(0deg);
