@@ -91,3 +91,16 @@ test('api has unauthenticated healthcheck resource', () => {
     AuthorizationType: 'NONE',
   });
 });
+
+// verify the two cache behaviors point to the same origin id (single origin reuse)
+test('cloudfront behaviors share same origin', () => {
+  const app = new cdk.App({ context: { prefix: 'myprefix' } });
+  const stack = new Cdk.CdkStack(app, 'CfStack');
+  const template = Template.fromStack(stack);
+  const json = template.toJSON();
+  const distKey = Object.keys(json.Resources).find(k => json.Resources[k].Type === 'AWS::CloudFront::Distribution');
+  expect(distKey).toBeDefined();
+  const cacheBehaviors = json.Resources[distKey!].Properties.DistributionConfig.CacheBehaviors;
+  expect(cacheBehaviors.length).toBeGreaterThanOrEqual(2);
+  expect(cacheBehaviors[0].TargetOriginId).toEqual(cacheBehaviors[1].TargetOriginId);
+});

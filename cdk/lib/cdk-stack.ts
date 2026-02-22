@@ -211,9 +211,28 @@ export class CdkStack extends cdk.Stack {
       });
     }
 
-    const apiOrigin = new origins.RestApiOrigin(api!);
-
     // build CloudFront distribution that fronts the asset bucket and optionally the API
+    // we avoid the non-null assertion by constructing the additional behaviors
+    // only when `api` is defined. the origin object is created once and reused
+    // for both the normal `/api/*` path and the healthcheck path so that the
+    // resulting distribution shares a single origin rather than spinning up two
+    // identical ones.
+    let additionalBehaviors: Record<string, cloudfront.BehaviorOptions> | undefined;
+    if (api) {
+      const apiOrigin = new origins.RestApiOrigin(api);
+      const commonBehavior: Partial<cloudfront.BehaviorOptions> = {
+        allowedMethods: cloudfront.AllowedMethods.ALLOW_ALL,
+        viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+        cachePolicy: cloudfront.CachePolicy.CACHING_DISABLED,
+        originRequestPolicy: cloudfront.OriginRequestPolicy.ALL_VIEWER_EXCEPT_HOST_HEADER,
+        responseHeadersPolicy: cloudfront.ResponseHeadersPolicy.CORS_ALLOW_ALL_ORIGINS,
+      };
+      additionalBehaviors = {
+        'api/*': { origin: apiOrigin, ...commonBehavior },
+        'healthcheck/*': { origin: apiOrigin, ...commonBehavior },
+      };
+    }
+
     const distributionProps: cloudfront.DistributionProps = {
       defaultBehavior: {
         // use the standard S3 origin rather than the static website origin
@@ -221,26 +240,7 @@ export class CdkStack extends cdk.Stack {
         viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
       },
 
-      additionalBehaviors: api
-        ? {
-            'api/*': {
-              origin: apiOrigin,
-              allowedMethods: cloudfront.AllowedMethods.ALLOW_ALL,
-              viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
-              cachePolicy: cloudfront.CachePolicy.CACHING_DISABLED,
-              originRequestPolicy: cloudfront.OriginRequestPolicy.ALL_VIEWER_EXCEPT_HOST_HEADER,
-              responseHeadersPolicy: cloudfront.ResponseHeadersPolicy.CORS_ALLOW_ALL_ORIGINS,
-            },
-            'healthcheck/*': {
-              origin: apiOrigin,
-              allowedMethods: cloudfront.AllowedMethods.ALLOW_ALL,
-              viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
-              cachePolicy: cloudfront.CachePolicy.CACHING_DISABLED,
-              originRequestPolicy: cloudfront.OriginRequestPolicy.ALL_VIEWER_EXCEPT_HOST_HEADER,
-              responseHeadersPolicy: cloudfront.ResponseHeadersPolicy.CORS_ALLOW_ALL_ORIGINS,
-            },
-          }
-        : undefined,
+      additionalBehaviors,
       domainNames: props.domainName ? [props.domainName] : undefined,
       certificate: props.certificateArn
         ? acm.Certificate.fromCertificateArn(this, 'Certificate', props.certificateArn)
