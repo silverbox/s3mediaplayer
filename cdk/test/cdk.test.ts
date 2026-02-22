@@ -74,3 +74,20 @@ test('lambda log group has one‑month retention', () => {
     RetentionInDays: 30,
   });
 });
+// ensure the healthcheck path exists and is unauthenticated
+// verify both the resource and the GET method with AuthorizationType NONE
+
+test('api has unauthenticated healthcheck resource', () => {
+  const app = new cdk.App({ context: { prefix: 'myprefix' } });
+  const stack = new Cdk.CdkStack(app, 'HealthStack');
+  const template = Template.fromStack(stack);
+
+  template.hasResourceProperties('AWS::ApiGateway::Resource', {
+    PathPart: 'healthcheck',
+  });
+
+  template.hasResourceProperties('AWS::ApiGateway::Method', {
+    HttpMethod: 'GET',
+    AuthorizationType: 'NONE',
+  });
+});

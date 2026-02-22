@@ -196,7 +196,22 @@ export class CdkStack extends cdk.Stack {
         authorizationType: apigateway.AuthorizationType.COGNITO,
         authorizer,
       });
+
+      // healthcheck endpoint without any authorizer; used by CloudFront to
+      // verify that the API gateway is reachable. a simple mock integration
+      // returns HTTP 200.
+      const health = api.root.addResource('healthcheck');
+      health.addMethod('GET', new apigateway.MockIntegration({
+        integrationResponses: [{ statusCode: '200' }],
+        passthroughBehavior: apigateway.PassthroughBehavior.NEVER,
+        requestTemplates: { 'application/json': '{"statusCode": 200}' },
+      }), {
+        methodResponses: [{ statusCode: '200' }],
+        authorizationType: apigateway.AuthorizationType.NONE,
+      });
     }
+
+    const apiOrigin = new origins.RestApiOrigin(api!);
 
     // build CloudFront distribution that fronts the asset bucket and optionally the API
     const distributionProps: cloudfront.DistributionProps = {
@@ -208,9 +223,21 @@ export class CdkStack extends cdk.Stack {
 
       additionalBehaviors: api
         ? {
-            '/api/*': {
-              origin: new origins.RestApiOrigin(api),
+            'api/*': {
+              origin: apiOrigin,
+              allowedMethods: cloudfront.AllowedMethods.ALLOW_ALL,
               viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+              cachePolicy: cloudfront.CachePolicy.CACHING_DISABLED,
+              originRequestPolicy: cloudfront.OriginRequestPolicy.ALL_VIEWER_EXCEPT_HOST_HEADER,
+              responseHeadersPolicy: cloudfront.ResponseHeadersPolicy.CORS_ALLOW_ALL_ORIGINS,
+            },
+            'healthcheck/*': {
+              origin: apiOrigin,
+              allowedMethods: cloudfront.AllowedMethods.ALLOW_ALL,
+              viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+              cachePolicy: cloudfront.CachePolicy.CACHING_DISABLED,
+              originRequestPolicy: cloudfront.OriginRequestPolicy.ALL_VIEWER_EXCEPT_HOST_HEADER,
+              responseHeadersPolicy: cloudfront.ResponseHeadersPolicy.CORS_ALLOW_ALL_ORIGINS,
             },
           }
         : undefined,
