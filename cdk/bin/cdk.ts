@@ -8,10 +8,21 @@ const app = new cdk.App();
 // read an optional prefix from context (-c prefix=foo)
 const prefix = app.node.tryGetContext('prefix') as string | 's3mediaplayer';
 const lambdaVersionKey = app.node.tryGetContext('lambdaVersionKey') as string | 'v1';
+const domainName = app.node.tryGetContext('domainName') as string | undefined;
+const certificateArn = app.node.tryGetContext('certificateArn') as string | undefined;
+
+// compute a physical stack name that includes the prefix (defaulting to the
+// prefix value itself). the CdkStack class will also synthesize this for
+// cases where the stack is instantiated directly (such as in unit tests), but
+// we provide it here for clarity when the CLI is used.
+const stackName = `${prefix}-stack`;
 
 new CdkStack(app, 'CdkStack', {
   prefix: prefix,
-  lambdaVersionKey: lambdaVersionKey
+  stackName: stackName,
+  lambdaVersionKey: lambdaVersionKey,
+  domainName: domainName,
+  certificateArn: certificateArn,
   /* If you don't specify 'env', this stack will be environment-agnostic.
    * Account/Region-dependent features and context lookups will not work,
    * but a single synthesized template can be deployed anywhere. */

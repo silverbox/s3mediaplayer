@@ -1,5 +1,8 @@
 .App {
   text-align: center;
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh; /* allow children to size properly */
 }
 
 .App-logo {
@@ -15,13 +18,25 @@
 
 .App-header {
   background-color: #282c34;
-  min-height: 100vh;
+  /* let header size to its content, prevent growth */
+  padding: 1rem 0;
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-  font-size: calc(10px + 2vmin);
+  flex: 0 0 auto;
   color: white;
+}
+
+/* move the main portion below header with spacing; allow it to grow */
+.App main {
+  padding: 1rem;
+  flex: 1 1 auto;
+}
+
+/* make the welcome heading less dominant so file list is visible */
+.App-header h3 {
+  font-size: 1.5rem;
+  margin: 0.5rem 0;
 }
 
 .App-link {
@@ -45,6 +60,20 @@
 
 .audio-player {
   margin-top: 1rem;
+}
+
+/* ensure the Amplify login form is centered vertically */
+html, body, #root {
+  height: 100%;
+  margin: 0;
+}
+
+.amplify-authenticator {
+  display: flex !important;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%; /* use full height of its container */
 }
 
 @keyframes App-logo-spin {

@@ -31,11 +31,14 @@ Amplify.configure({
 
 function App() {
   const [files, setFiles] = useState<string[]>([]);
+  // currently playing filename (from the files list)
+  const [currentFile, setCurrentFile] = useState<string>('');
   // URL for the currently selected audio file (if any)
   const [audioUrl, setAudioUrl] = useState<string>('');
 
   // click handler that retrieves a signed URL and updates audioUrl
   const handlePlay = async (filename: string) => {
+    setCurrentFile(filename);
     try {
       const session = await fetchAuthSession();
       if (!session) {
@@ -79,6 +82,20 @@ function App() {
     } catch (err) {
       console.error('failed to fetch playback URL', err);
     }
+  };
+
+  const playRandom = () => {
+    if (files.length === 0) {
+      return;
+    }
+    // choose a random file different from current if possible
+    let choice = currentFile;
+    if (files.length > 1) {
+      while (choice === currentFile) {
+        choice = files[Math.floor(Math.random() * files.length)];
+      }
+    }
+    handlePlay(choice);
   };
 
   const processS3Request = (credentials: any, filename: string) => {
@@ -155,7 +172,8 @@ function App() {
 
   return (
     <ThemeProvider>
-      <Authenticator>
+      {/* signup disabled since Cognito self‑sign‑up is turned off */}
+      <Authenticator hideSignUp>
         {({ signOut, user }) => (
           <View className="App">
             <header className="App-header">
@@ -192,7 +210,7 @@ function App() {
                 {/* audio player section */}
                 {audioUrl && (
                   <div className="audio-player">
-                    <audio controls autoPlay src={audioUrl}>
+                    <audio controls autoPlay src={audioUrl} onEnded={playRandom}>
                       Your browser does not support the audio element.
                     </audio>
                   </div>

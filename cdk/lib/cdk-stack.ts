@@ -5,14 +5,24 @@ import * as cognito from 'aws-cdk-lib/aws-cognito';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
+import * as cloudfront from 'aws-cdk-lib/aws-cloudfront';
+import * as origins from 'aws-cdk-lib/aws-cloudfront-origins';
+import * as acm from 'aws-cdk-lib/aws-certificatemanager';
+import * as logs from 'aws-cdk-lib/aws-logs';
 
 // extend the stock props so we can pass a prefix through the stack
 export interface CdkStackProps extends cdk.StackProps {
+  stackName?: string; // allow stackName to be overridden (otherwise we compute one based on prefix)
   /** optional prefix applied to names of resources */
   prefix?: string;
   /** when true the example lambda and API are not created (useful for unit tests) */
   disableLambda?: boolean;
   lambdaVersionKey?: string; // optional version key to force lambda updates when code changes without changing the logical ID; can also be set via cdk context (e.g. -c lambdaVersionKey=v2)
+
+  /** optional alternate domain for the CloudFront distribution */
+  domainName?: string;
+  /** if providing a domain name, you can optionally pass an ACM certificate ARN */
+  certificateArn?: string;
 }
 
 export class CdkStack extends cdk.Stack {
@@ -21,10 +31,17 @@ export class CdkStack extends cdk.Stack {
   public readonly bucket: s3.Bucket;
 
   constructor(scope: Construct, id: string, props: CdkStackProps = {}) {
-    super(scope, id, props);
-
     // determine prefix from either props or cdk context; fall back to undefined
-    const prefix = props.prefix ?? this.node.tryGetContext('prefix');
+    const prefix = props.prefix ?? scope.node.tryGetContext('prefix');
+
+    // build a sensible stack name when a prefix is provided and the user
+    // hasn't already specified one. this ensures the generated
+    // CloudFormation stack name contains the prefix value.
+    const stackName = props.stackName ?? (prefix ? `${prefix}-stack` : undefined);
+
+    super(scope, id, { ...props, stackName });
+
+    // prefix and version key are now available for the rest of the stack
     const lambdaVersionKey = props.lambdaVersionKey ?? this.node.tryGetContext('lambdaVersionKey') ?? 'v1';
     const accountId = this.account;
 
@@ -38,6 +55,28 @@ export class CdkStack extends cdk.Stack {
       removalPolicy: cdk.RemovalPolicy.DESTROY,
       autoDeleteObjects: true,
     });
+
+    // front-end asset bucket (served via CloudFront)
+    const assetBucket = new s3.Bucket(this, 'AssetBucket', {
+      bucketName: withAccountId('asset-bucket'),
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      autoDeleteObjects: true,
+      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+      // blockPublicAccess: new s3.BlockPublicAccess({
+      //   blockPublicAcls: true,
+      //   blockPublicPolicy: false, // CloudFrontのOACポリシーを許可
+      //   ignorePublicAcls: true,
+      //   restrictPublicBuckets: false, // CloudFrontのOACアクセスを許可
+      // }),
+      encryption: s3.BucketEncryption.S3_MANAGED,
+    });
+
+    // // we serve the bucket as a static website, so it must be publicly readable
+    // assetBucket.addToResourcePolicy(new iam.PolicyStatement({
+    //   actions: ['s3:GetObject'],
+    //   resources: [assetBucket.arnForObjects('*')],
+    //   principals: [new iam.AnyPrincipal()],
+    // }));
 
     // Cognito user pool for authentication
     this.userPool = new cognito.UserPool(this, 'UserPool', {
@@ -94,6 +133,7 @@ export class CdkStack extends cdk.Stack {
     });
 
     // optional example lambda + API; can be skipped during testing
+    let api: apigateway.RestApi | undefined;
     if (!props.disableLambda) {
       // create a layer containing aws-sdk (v2) so that it's available in the
       // Node runtime; newer NodeJS lambda runtimes no longer include the v2
@@ -124,8 +164,15 @@ export class CdkStack extends cdk.Stack {
       // Grant lambda read access to bucket
       this.bucket.grantRead(listLambda);
 
+      // create a log group for the function with 30‑day retention
+      new logs.LogGroup(this, 'ListHandlerLogGroup', {
+        logGroupName: `/aws/lambda/${listLambda.functionName}`,
+        retention: logs.RetentionDays.ONE_MONTH,
+        removalPolicy: cdk.RemovalPolicy.DESTROY,
+      });
+
       // API Gateway fronting the lambda
-      const api = new apigateway.RestApi(this, 'MediaApi', {
+      api = new apigateway.RestApi(this, 'MediaApi', {
         restApiName: withPrefix('media-api'),
         defaultCorsPreflightOptions: {
           allowOrigins: apigateway.Cors.ALL_ORIGINS,
@@ -141,16 +188,75 @@ export class CdkStack extends cdk.Stack {
       });
 
       const listIntegration = new apigateway.LambdaIntegration(listLambda);
-      api.root.addMethod('GET', listIntegration, {
+      // expose the lambda under an /api path so that CloudFront behavior
+      // which routes "/api/*" to this origin will match correctly.  It also
+      // makes the API gateway URL look like https://.../prod/api
+      const apiResource = api!.root.addResource('api');
+      apiResource.addMethod('GET', listIntegration, {
         authorizationType: apigateway.AuthorizationType.COGNITO,
         authorizer,
       });
+
+      // healthcheck endpoint without any authorizer; used by CloudFront to
+      // verify that the API gateway is reachable. a simple mock integration
+      // returns HTTP 200.
+      const health = api.root.addResource('healthcheck');
+      health.addMethod('GET', new apigateway.MockIntegration({
+        integrationResponses: [{ statusCode: '200' }],
+        passthroughBehavior: apigateway.PassthroughBehavior.NEVER,
+        requestTemplates: { 'application/json': '{"statusCode": 200}' },
+      }), {
+        methodResponses: [{ statusCode: '200' }],
+        authorizationType: apigateway.AuthorizationType.NONE,
+      });
     }
+
+    // build CloudFront distribution that fronts the asset bucket and optionally the API
+    // we avoid the non-null assertion by constructing the additional behaviors
+    // only when `api` is defined. the origin object is created once and reused
+    // for both the normal `/api/*` path and the healthcheck path so that the
+    // resulting distribution shares a single origin rather than spinning up two
+    // identical ones.
+    let additionalBehaviors: Record<string, cloudfront.BehaviorOptions> | undefined;
+    if (api) {
+      const apiOrigin = new origins.RestApiOrigin(api);
+      const commonBehavior: Partial<cloudfront.BehaviorOptions> = {
+        allowedMethods: cloudfront.AllowedMethods.ALLOW_ALL,
+        viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+        cachePolicy: cloudfront.CachePolicy.CACHING_DISABLED,
+        originRequestPolicy: cloudfront.OriginRequestPolicy.ALL_VIEWER_EXCEPT_HOST_HEADER,
+        responseHeadersPolicy: cloudfront.ResponseHeadersPolicy.CORS_ALLOW_ALL_ORIGINS,
+      };
+      additionalBehaviors = {
+        'api/*': { origin: apiOrigin, ...commonBehavior },
+        'healthcheck/*': { origin: apiOrigin, ...commonBehavior },
+      };
+    }
+
+    const distributionProps: cloudfront.DistributionProps = {
+      defaultBehavior: {
+        // use the standard S3 origin rather than the static website origin
+        origin: origins.S3BucketOrigin.withOriginAccessControl(assetBucket),
+        viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+      },
+
+      additionalBehaviors,
+      domainNames: props.domainName ? [props.domainName] : undefined,
+      certificate: props.certificateArn
+        ? acm.Certificate.fromCertificateArn(this, 'Certificate', props.certificateArn)
+        : undefined,
+      defaultRootObject: 'index.html', // デフォルトルートオブジェクトを指定
+    };
+
+    const distribution = new cloudfront.Distribution(this, 'Distribution', distributionProps);
 
     // Outputs for front-end configuration
     new cdk.CfnOutput(this, 'UserPoolId', { value: this.userPool.userPoolId });
     new cdk.CfnOutput(this, 'UserPoolClientId', { value: this.userPoolClient.userPoolClientId });
     new cdk.CfnOutput(this, 'BucketName', { value: this.bucket.bucketName });
+    // also output the asset bucket and distribution domain
+    new cdk.CfnOutput(this, 'AssetBucketName', { value: assetBucket.bucketName });
+    new cdk.CfnOutput(this, 'DistributionDomain', { value: distribution.domainName });
     new cdk.CfnOutput(this, 'IdentityPoolId', { value: identityPool.ref });
     // optional prefix export
     if (prefix) {
