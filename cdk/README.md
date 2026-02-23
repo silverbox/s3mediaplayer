@@ -20,4 +20,7 @@ cdk bootstrap
 
 aws login
 cdk deploy -c prefix=foo-bar-mediaplayer -c lambdaVersionKey=v20260221a -c domainName=your.domain \
-  -c certificateArn=arn:aws:acm:us-east-1:99999999999999:certificate/xxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+  -c certificateArn=arn:aws:acm:us-east-1:99999999999999:certificate/xxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx \
+  -c apiKey=hogehoge-fugafuga
+
+※apiKeyは初期ミス関係で、手動でCloudFrontに設定

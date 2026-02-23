@@ -23,6 +23,8 @@ export interface CdkStackProps extends cdk.StackProps {
   domainName?: string;
   /** if providing a domain name, you can optionally pass an ACM certificate ARN */
   certificateArn?: string;
+  // optional API key value to be used in the example lambda's API Gateway; can also be set via cdk context (e.g. -
+  apiKey?: string;
 }
 
 export class CdkStack extends cdk.Stack {
@@ -31,18 +33,65 @@ export class CdkStack extends cdk.Stack {
   public readonly bucket: s3.Bucket;
 
   constructor(scope: Construct, id: string, props: CdkStackProps = {}) {
-    // determine prefix from either props or cdk context; fall back to undefined
-    const prefix = props.prefix ?? scope.node.tryGetContext('prefix');
-
-    // build a sensible stack name when a prefix is provided and the user
-    // hasn't already specified one. this ensures the generated
-    // CloudFormation stack name contains the prefix value.
-    const stackName = props.stackName ?? (prefix ? `${prefix}-stack` : undefined);
+    // calculate provisional prefix (parameters haven't been created yet)
+    const protoPrefix = props.prefix ?? scope.node.tryGetContext('prefix');
+    const stackName = props.stackName ?? (protoPrefix ? `${protoPrefix}-stack` : undefined);
 
     super(scope, id, { ...props, stackName });
 
-    // prefix and version key are now available for the rest of the stack
-    const lambdaVersionKey = props.lambdaVersionKey ?? this.node.tryGetContext('lambdaVersionKey') ?? 'v1';
+    // ------------------------------------------------------------------
+    // CloudFormation parameters corresponding to props in CdkStackProps.
+    // These allow the values to be specified at deploy time via CFN APIs
+    // or the `cdk deploy -c` command.  must be created after calling super.
+    const prefixParam = new cdk.CfnParameter(this, 'Prefix', {
+      type: 'String',
+      default: props.prefix ?? '',
+      description: 'Optional resource name prefix',
+    });
+
+    const disableLambdaParam = new cdk.CfnParameter(this, 'DisableLambda', {
+      type: 'String',
+      allowedValues: ['true', 'false'],
+      default: String(props.disableLambda ?? false),
+      description: 'Set to true to skip creation of example lambda/API',
+    });
+
+    const lambdaVersionKeyParam = new cdk.CfnParameter(this, 'LambdaVersionKey', {
+      type: 'String',
+      default: props.lambdaVersionKey ?? 'v1',
+      description: 'Key used to force lambda redeploys when code changes',
+    });
+
+    const domainNameParam = new cdk.CfnParameter(this, 'DomainName', {
+      type: 'String',
+      default: props.domainName ?? '',
+      description: 'Optional alternate domain for the CloudFront distribution',
+    });
+
+    const certificateArnParam = new cdk.CfnParameter(this, 'CertificateArn', {
+      type: 'String',
+      default: props.certificateArn ?? '',
+      description: 'If providing domainName, optionally supply an ACM cert ARN',
+    });
+
+    // optional example lambda + API; can be skipped during testing
+    // parameter for the API key that CloudFront will attach to requests.
+    const apiKeyParam = new cdk.CfnParameter(this, 'ApiKey', {
+      type: 'String',
+      default: props.apiKey ?? '',
+      description: 'Value used as x-api-key header when CloudFront talks to API Gateway',
+    });
+
+    // derive runtime values: props take precedence, then parameters, then
+    // defaults / context
+    const prefix = props.prefix ?? (prefixParam.valueAsString || scope.node.tryGetContext('prefix'));
+    const disableLambda = props.disableLambda ?? (disableLambdaParam.valueAsString === 'true');
+    const lambdaVersionKey = props.lambdaVersionKey ?? lambdaVersionKeyParam.valueAsString ?? 'v1';
+    const domainName = props.domainName ?? (domainNameParam.valueAsString || undefined);
+    const certificateArn = props.certificateArn ?? (certificateArnParam.valueAsString || undefined);
+    const apiKeyVal = props.apiKey ?? apiKeyParam.valueAsString ?? 'test-api-key';
+
+    // prefix and account id are now available for the rest of the stack
     const accountId = this.account;
 
     // helper to build names only when a prefix is supplied
@@ -132,7 +181,6 @@ export class CdkStack extends cdk.Stack {
       },
     });
 
-    // optional example lambda + API; can be skipped during testing
     let api: apigateway.RestApi | undefined;
     if (!props.disableLambda) {
       // create a layer containing aws-sdk (v2) so that it's available in the
@@ -178,7 +226,19 @@ export class CdkStack extends cdk.Stack {
           allowOrigins: apigateway.Cors.ALL_ORIGINS,
           allowMethods: apigateway.Cors.ALL_METHODS,
         },
+        apiKeySourceType: apigateway.ApiKeySourceType.HEADER,
       });
+
+      // create an API Gateway ApiKey resource that matches the parameter value
+      const apiKey = new apigateway.ApiKey(this, 'GwApiKey', {
+        apiKeyName: withPrefix('api-key'),
+        value: apiKeyVal,
+      });
+      const usagePlan = api.addUsagePlan('UsagePlan', {
+        name: withPrefix('usage-plan'),
+      });
+      usagePlan.addApiKey(apiKey);
+      usagePlan.addApiStage({ stage: api.deploymentStage });
 
       // add a Cognito User Pools authorizer so that only authenticated
       // requests with a valid ID token are allowed; the token’s claims will
@@ -195,6 +255,7 @@ export class CdkStack extends cdk.Stack {
       apiResource.addMethod('GET', listIntegration, {
         authorizationType: apigateway.AuthorizationType.COGNITO,
         authorizer,
+        apiKeyRequired: true,
       });
 
       // healthcheck endpoint without any authorizer; used by CloudFront to
@@ -219,7 +280,11 @@ export class CdkStack extends cdk.Stack {
     // identical ones.
     let additionalBehaviors: Record<string, cloudfront.BehaviorOptions> | undefined;
     if (api) {
-      const apiOrigin = new origins.RestApiOrigin(api);
+      const apiOrigin = new origins.RestApiOrigin(api, {
+        customHeaders: {
+          'x-api-key': apiKeyVal,
+        },
+      });
       const commonBehavior: Partial<cloudfront.BehaviorOptions> = {
         allowedMethods: cloudfront.AllowedMethods.ALLOW_ALL,
         viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
@@ -241,9 +306,9 @@ export class CdkStack extends cdk.Stack {
       },
 
       additionalBehaviors,
-      domainNames: props.domainName ? [props.domainName] : undefined,
-      certificate: props.certificateArn
-        ? acm.Certificate.fromCertificateArn(this, 'Certificate', props.certificateArn)
+      domainNames: domainName ? [domainName] : undefined,
+      certificate: certificateArn
+        ? acm.Certificate.fromCertificateArn(this, 'Certificate', certificateArn)
         : undefined,
       defaultRootObject: 'index.html', // デフォルトルートオブジェクトを指定
     };

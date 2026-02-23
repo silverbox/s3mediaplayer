@@ -43,6 +43,29 @@ cp frontend/.env.example frontend/.env.local
 
 CDK でスタックをデプロイすると、必要な設定値が出力されます。
 
+- `ApiKey` パラメーター：CloudFront が API Gateway にリクエストを送信するときに
+  `x-api-key` ヘッダーとして付与される値。API Gateway 側でも同じ値の
+  ApiKey が作成され、呼び出し時にマッチする必要があります。
+  
+  **デプロイ時の指定方法**
+  このパラメーターは CloudFormation のパラメーターなので、`cdk deploy`
+  では `--parameters ApiKey=...` を使って渡します。`-c apiKey=...` で
+  コンテキスト変数として指定しても、テンプレートに自動的には反映され
+  ません（コード中でコンテキスト値をフォールバックとして使う仕組みは
+  ありますが、正式にはパラメーターを使ってください）。
+
+
+このほか、スタックデプロイ時にフロントエンドや本体の挙動を調整する
+パラメーターを以下から指定できます。
+
+| パラメーター名 | 説明 | デフォルト |
+|---------------|------|------------|
+| `Prefix` | リソース名に付与する接頭辞 | 空 |
+| `DisableLambda` | Lambda/API を作成しない | false |
+| `LambdaVersionKey` | Lambda の再デプロイをカンタンにするキー | v1 |
+| `DomainName` | CloudFront のカスタムドメイン | 空 |
+| `CertificateArn` | カスタムドメイン用 ACM 証明書 ARN | 空 |
+
 # 構造
 
 S3バケットの直下に、ユーザー毎のフォルダが作成されます。CognitoのFine-Grained Access Controlにより、ユーザー毎のフォルダのみアクセス可能です。
