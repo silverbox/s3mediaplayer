@@ -31,6 +31,7 @@ Amplify.configure({
 
 function App() {
   const [files, setFiles] = useState<string[]>([]);
+  const [folders, setFolders] = useState<string[]>([]);
   // currently playing filename (from the files list)
   const [currentFile, setCurrentFile] = useState<string>('');
   // URL for the currently selected audio file (if any)
@@ -40,20 +41,11 @@ function App() {
   const handlePlay = async (filename: string) => {
     setCurrentFile(filename);
     try {
-      const session = await fetchAuthSession();
-      if (!session) {
-        console.error('Session is not valid');
+      const idToken = await getIdToken();
+      if (!idToken) {
+        console.error('ID token is not available');
         return;
       }
-      if (!session.tokens) {
-        console.error('Session tokens are not available');
-        return;
-      }
-      if (!session.tokens.idToken) {
-        console.error('Session idToken is not available');
-        return;
-      }
-      const idToken = session.tokens.idToken.toString();
 
       // `Storage.get` will automatically use the current credentials
       // (Cognito identity) to sign the request.  We ask for a URL rather
@@ -129,6 +121,28 @@ function App() {
     });
   };
 
+  const getIdToken = async (): Promise<string | null> => {
+    try {
+      const session = await fetchAuthSession();
+      if (!session) {
+        console.error('Session is not valid');
+        return null;
+      }
+      if (!session.tokens) {
+        console.error('Session tokens are not available');
+        return null;
+      }
+      if (!session.tokens.idToken) {
+        console.error('Session idToken is not available');
+        return null;
+      }
+      return session.tokens.idToken.toString();
+    } catch (err) {
+      console.error('failed to get ID token', err);
+      return null;
+    }
+  };
+
   useEffect(() => {
     const apiUrl = process.env.REACT_APP_API_URL || '';
 
@@ -140,20 +154,11 @@ function App() {
     const fetchWithAuth = async () => {
       try {
         // get a valid session (refreshes if necessary)
-        const session = await fetchAuthSession();
-        if (!session) {
-          console.error('Session is not valid');
+        const idToken = await getIdToken();
+        if (!idToken) {
+          console.error('ID token is not available');
           return;
         }
-        if (!session.tokens) {
-          console.error('Session tokens are not available');
-          return;
-        }
-        if (!session.tokens.idToken) {
-          console.error('Session idToken is not available');
-          return;
-        }
-        const idToken = session.tokens.idToken.toString();
 
         const res = await fetch(apiUrl + '/', {
           headers: {
@@ -161,7 +166,16 @@ function App() {
           },
         });
         const data = await res.json();
-        setFiles(data);
+
+        // lambda now returns { folders, objects }
+        if (data && typeof data === 'object') {
+          setFolders(Array.isArray(data.folders) ? data.folders : []);
+          setFiles(Array.isArray(data.objects) ? data.objects : []);
+        } else {
+          // fallback for legacy responses
+          setFiles(Array.isArray(data) ? data : []);
+          setFolders([]);
+        }
       } catch (err) {
         console.error('failed to list files', err);
       }
@@ -182,6 +196,19 @@ function App() {
             </header>
             <main>
               {/* TODO: display files and upload/download UI */}
+              <section>
+                        <h4>Your folders</h4>
+                {folders.length === 0 ? (
+                  <p>No folders found</p>
+                ) : (
+                  <ul>
+                    {folders.map((d) => (
+                      <li key={d}>{d}</li>
+                    ))}
+                  </ul>
+                )}
+              </section>
+
               <section>
                         <h4>Your files</h4>
                 {files.length === 0 ? (

@@ -9,7 +9,7 @@ exports.handler = async (event) => {
     "Access-Control-Allow-Methods": "OPTIONS,POST,GET"
   };
   // This lambda would list objects in the user's folder.
-//   // The 'sub' could be obtained from Cognito Identity claims.
+  // The 'sub' could be obtained from Cognito Identity claims.
   const userId = event.requestContext.authorizer?.claims?.sub;
 
   // ID Tokenを取得（オーサライザーから）
@@ -35,16 +35,29 @@ exports.handler = async (event) => {
       headers: corsHeaders
     };
   }
+  const basePrefix = `${identityId}/`;
   const params = {
     Bucket: bucket,
-    Prefix: `${identityId}/`,
+    Prefix: basePrefix,
+    Delimiter: '/',       // only list immediate children
   };
   const data = await s3.listObjectsV2(params).promise();
-  const keys = data.Contents ? data.Contents.map(o => o.Key) : [];
+
+  // folders are returned in CommonPrefixes
+  const folders = (data.CommonPrefixes || []).map(cp => {
+    // leave as-is; clients may want the full prefix (e.g. "identityId/folder/")
+    return cp.Prefix;
+  });
+
+  // objects are in Contents; filter out the folder placeholder if any
+  const objects = (data.Contents || [])
+    .filter(o => o.Key !== basePrefix)
+    .map(o => o.Key); // keep full key so clients can use it directly
+
   return { 
     statusCode: 200,
     headers: corsHeaders,
-    body: JSON.stringify(keys)
+    body: JSON.stringify({ folders, objects })
   };
 };
 
