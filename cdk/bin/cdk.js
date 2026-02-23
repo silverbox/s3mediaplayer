@@ -1,0 +1,37 @@
+#!/usr/bin/env node
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+require("source-map-support/register");
+const cdk = require("aws-cdk-lib");
+const cdk_stack_1 = require("../lib/cdk-stack");
+const app = new cdk.App();
+// read an optional prefix from context (-c prefix=foo)
+const prefix = app.node.tryGetContext('prefix');
+const lambdaVersionKey = app.node.tryGetContext('lambdaVersionKey');
+const domainName = app.node.tryGetContext('domainName');
+const certificateArn = app.node.tryGetContext('certificateArn');
+const apiKey = app.node.tryGetContext('apiKey');
+// compute a physical stack name that includes the prefix (defaulting to the
+// prefix value itself). the CdkStack class will also synthesize this for
+// cases where the stack is instantiated directly (such as in unit tests), but
+// we provide it here for clarity when the CLI is used.
+const stackName = `${prefix}-stack`;
+new cdk_stack_1.CdkStack(app, 'CdkStack', {
+    prefix: prefix,
+    stackName: stackName,
+    lambdaVersionKey: lambdaVersionKey,
+    domainName: domainName,
+    certificateArn: certificateArn,
+    apiKey: apiKey,
+    /* If you don't specify 'env', this stack will be environment-agnostic.
+     * Account/Region-dependent features and context lookups will not work,
+     * but a single synthesized template can be deployed anywhere. */
+    /* Uncomment the next line to specialize this stack for the AWS Account
+     * and Region that are implied by the current CLI configuration. */
+    // env: { account: process.env.CDK_DEFAULT_ACCOUNT, region: process.env.CDK_DEFAULT_REGION },
+    /* Uncomment the next line if you know exactly what Account and Region you
+     * want to deploy the stack to. */
+    // env: { account: '123456789012', region: 'us-east-1' },
+    /* For more information, see https://docs.aws.amazon.com/cdk/latest/guide/environments.html */
+});
+//# sourceMappingURL=data:application/json;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiY2RrLmpzIiwic291cmNlUm9vdCI6IiIsInNvdXJjZXMiOlsiY2RrLnRzIl0sIm5hbWVzIjpbXSwibWFwcGluZ3MiOiI7OztBQUNBLHVDQUFxQztBQUNyQyxtQ0FBbUM7QUFDbkMsZ0RBQTRDO0FBRTVDLE1BQU0sR0FBRyxHQUFHLElBQUksR0FBRyxDQUFDLEdBQUcsRUFBRSxDQUFDO0FBRTFCLHVEQUF1RDtBQUN2RCxNQUFNLE1BQU0sR0FBRyxHQUFHLENBQUMsSUFBSSxDQUFDLGFBQWEsQ0FBQyxRQUFRLENBQTZCLENBQUM7QUFDNUUsTUFBTSxnQkFBZ0IsR0FBRyxHQUFHLENBQUMsSUFBSSxDQUFDLGFBQWEsQ0FBQyxrQkFBa0IsQ0FBa0IsQ0FBQztBQUNyRixNQUFNLFVBQVUsR0FBRyxHQUFHLENBQUMsSUFBSSxDQUFDLGFBQWEsQ0FBQyxZQUFZLENBQXVCLENBQUM7QUFDOUUsTUFBTSxjQUFjLEdBQUcsR0FBRyxDQUFDLElBQUksQ0FBQyxhQUFhLENBQUMsZ0JBQWdCLENBQXVCLENBQUM7QUFFdEYsNEVBQTRFO0FBQzVFLHlFQUF5RTtBQUN6RSw4RUFBOEU7QUFDOUUsdURBQXVEO0FBQ3ZELE1BQU0sU0FBUyxHQUFHLEdBQUcsTUFBTSxRQUFRLENBQUM7QUFFcEMsSUFBSSxvQkFBUSxDQUFDLEdBQUcsRUFBRSxVQUFVLEVBQUU7SUFDNUIsTUFBTSxFQUFFLE1BQU07SUFDZCxTQUFTLEVBQUUsU0FBUztJQUNwQixnQkFBZ0IsRUFBRSxnQkFBZ0I7SUFDbEMsVUFBVSxFQUFFLFVBQVU7SUFDdEIsY0FBYyxFQUFFLGNBQWM7SUFDOUI7O3FFQUVpRTtJQUVqRTt1RUFDbUU7SUFDbkUsNkZBQTZGO0lBRTdGO3NDQUNrQztJQUNsQyx5REFBeUQ7SUFFekQsOEZBQThGO0NBQy9GLENBQUMsQ0FBQyIsInNvdXJjZXNDb250ZW50IjpbIiMhL3Vzci9iaW4vZW52IG5vZGVcbmltcG9ydCAnc291cmNlLW1hcC1zdXBwb3J0L3JlZ2lzdGVyJztcbmltcG9ydCAqIGFzIGNkayBmcm9tICdhd3MtY2RrLWxpYic7XG5pbXBvcnQgeyBDZGtTdGFjayB9IGZyb20gJy4uL2xpYi9jZGstc3RhY2snO1xuXG5jb25zdCBhcHAgPSBuZXcgY2RrLkFwcCgpO1xuXG4vLyByZWFkIGFuIG9wdGlvbmFsIHByZWZpeCBmcm9tIGNvbnRleHQgKC1jIHByZWZpeD1mb28pXG5jb25zdCBwcmVmaXggPSBhcHAubm9kZS50cnlHZXRDb250ZXh0KCdwcmVmaXgnKSBhcyBzdHJpbmcgfCAnczNtZWRpYXBsYXllcic7XG5jb25zdCBsYW1iZGFWZXJzaW9uS2V5ID0gYXBwLm5vZGUudHJ5R2V0Q29udGV4dCgnbGFtYmRhVmVyc2lvbktleScpIGFzIHN0cmluZyB8ICd2MSc7XG5jb25zdCBkb21haW5OYW1lID0gYXBwLm5vZGUudHJ5R2V0Q29udGV4dCgnZG9tYWluTmFtZScpIGFzIHN0cmluZyB8IHVuZGVmaW5lZDtcbmNvbnN0IGNlcnRpZmljYXRlQXJuID0gYXBwLm5vZGUudHJ5R2V0Q29udGV4dCgnY2VydGlmaWNhdGVBcm4nKSBhcyBzdHJpbmcgfCB1bmRlZmluZWQ7XG5cbi8vIGNvbXB1dGUgYSBwaHlzaWNhbCBzdGFjayBuYW1lIHRoYXQgaW5jbHVkZXMgdGhlIHByZWZpeCAoZGVmYXVsdGluZyB0byB0aGVcbi8vIHByZWZpeCB2YWx1ZSBpdHNlbGYpLiB0aGUgQ2RrU3RhY2sgY2xhc3Mgd2lsbCBhbHNvIHN5bnRoZXNpemUgdGhpcyBmb3Jcbi8vIGNhc2VzIHdoZXJlIHRoZSBzdGFjayBpcyBpbnN0YW50aWF0ZWQgZGlyZWN0bHkgKHN1Y2ggYXMgaW4gdW5pdCB0ZXN0cyksIGJ1dFxuLy8gd2UgcHJvdmlkZSBpdCBoZXJlIGZvciBjbGFyaXR5IHdoZW4gdGhlIENMSSBpcyB1c2VkLlxuY29uc3Qgc3RhY2tOYW1lID0gYCR7cHJlZml4fS1zdGFja2A7XG5cbm5ldyBDZGtTdGFjayhhcHAsICdDZGtTdGFjaycsIHtcbiAgcHJlZml4OiBwcmVmaXgsXG4gIHN0YWNrTmFtZTogc3RhY2tOYW1lLFxuICBsYW1iZGFWZXJzaW9uS2V5OiBsYW1iZGFWZXJzaW9uS2V5LFxuICBkb21haW5OYW1lOiBkb21haW5OYW1lLFxuICBjZXJ0aWZpY2F0ZUFybjogY2VydGlmaWNhdGVBcm4sXG4gIC8qIElmIHlvdSBkb24ndCBzcGVjaWZ5ICdlbnYnLCB0aGlzIHN0YWNrIHdpbGwgYmUgZW52aXJvbm1lbnQtYWdub3N0aWMuXG4gICAqIEFjY291bnQvUmVnaW9uLWRlcGVuZGVudCBmZWF0dXJlcyBhbmQgY29udGV4dCBsb29rdXBzIHdpbGwgbm90IHdvcmssXG4gICAqIGJ1dCBhIHNpbmdsZSBzeW50aGVzaXplZCB0ZW1wbGF0ZSBjYW4gYmUgZGVwbG95ZWQgYW55d2hlcmUuICovXG5cbiAgLyogVW5jb21tZW50IHRoZSBuZXh0IGxpbmUgdG8gc3BlY2lhbGl6ZSB0aGlzIHN0YWNrIGZvciB0aGUgQVdTIEFjY291bnRcbiAgICogYW5kIFJlZ2lvbiB0aGF0IGFyZSBpbXBsaWVkIGJ5IHRoZSBjdXJyZW50IENMSSBjb25maWd1cmF0aW9uLiAqL1xuICAvLyBlbnY6IHsgYWNjb3VudDogcHJvY2Vzcy5lbnYuQ0RLX0RFRkFVTFRfQUNDT1VOVCwgcmVnaW9uOiBwcm9jZXNzLmVudi5DREtfREVGQVVMVF9SRUdJT04gfSxcblxuICAvKiBVbmNvbW1lbnQgdGhlIG5leHQgbGluZSBpZiB5b3Uga25vdyBleGFjdGx5IHdoYXQgQWNjb3VudCBhbmQgUmVnaW9uIHlvdVxuICAgKiB3YW50IHRvIGRlcGxveSB0aGUgc3RhY2sgdG8uICovXG4gIC8vIGVudjogeyBhY2NvdW50OiAnMTIzNDU2Nzg5MDEyJywgcmVnaW9uOiAndXMtZWFzdC0xJyB9LFxuXG4gIC8qIEZvciBtb3JlIGluZm9ybWF0aW9uLCBzZWUgaHR0cHM6Ly9kb2NzLmF3cy5hbWF6b24uY29tL2Nkay9sYXRlc3QvZ3VpZGUvZW52aXJvbm1lbnRzLmh0bWwgKi9cbn0pOyJdfQ==
