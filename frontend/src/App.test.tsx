@@ -1,5 +1,7 @@
 // jest doesn't understand CSS imports so stub them out
-jest.mock('@aws-amplify/ui-react/styles.css', () => '');
+// depending on package exports Jest may not resolve the shorthand path,
+// mock the actual distributed file instead
+jest.mock('@aws-amplify/ui-react/dist/styles.css', () => '');
 
 import React from 'react';
 import { render, screen, waitFor } from '@testing-library/react';
@@ -20,9 +22,11 @@ jest.mock('aws-amplify', () => {
 
 describe('App', () => {
   beforeEach(() => {
-    // fake the fetch call used in the effect
+    // fake the fetch call used in the effect to return folders + objects
     global.fetch = jest.fn(() =>
-      Promise.resolve({ json: () => Promise.resolve(['song.mp3', 'image.png']) })
+      Promise.resolve({
+        json: () => Promise.resolve({ folders: ['dir/'], objects: ['song.mp3', 'image.png'] }),
+      })
     ) as any;
   });
 
@@ -36,6 +40,10 @@ describe('App', () => {
     // wait for the list item to appear
     const button = await screen.findByRole('button', { name: 'song.mp3' });
     expect(button).toBeInTheDocument();
+
+    // and the folder name should be rendered
+    const folder = await screen.findByText('dir/');
+    expect(folder).toBeInTheDocument();
 
     // click it and verify Storage.get was called
     userEvent.click(button);
