@@ -38,41 +38,45 @@ export class CdkStack extends cdk.Stack {
     const stackName = props.stackName ?? (protoPrefix ? `${protoPrefix}-stack` : undefined);
 
     super(scope, id, { ...props, stackName });
+    const prefix = props.prefix ?? scope.node.tryGetContext('prefix');
+    const lambdaVersionKey = props.lambdaVersionKey ?? scope.node.tryGetContext('lambdaVersionKey') ?? 'v1';
+    const domainName = props.domainName ?? undefined;
+    const certificateArn = props.certificateArn ?? undefined;
 
     // ------------------------------------------------------------------
     // CloudFormation parameters corresponding to props in CdkStackProps.
     // These allow the values to be specified at deploy time via CFN APIs
     // or the `cdk deploy -c` command.  must be created after calling super.
-    const prefixParam = new cdk.CfnParameter(this, 'Prefix', {
-      type: 'String',
-      default: props.prefix ?? '',
-      description: 'Optional resource name prefix',
-    });
+    // const prefixParam = new cdk.CfnParameter(this, 'Prefix', {
+    //   type: 'String',
+    //   default: props.prefix ?? '',
+    //   description: 'Optional resource name prefix',
+    // });
 
-    const disableLambdaParam = new cdk.CfnParameter(this, 'DisableLambda', {
-      type: 'String',
-      allowedValues: ['true', 'false'],
-      default: String(props.disableLambda ?? false),
-      description: 'Set to true to skip creation of example lambda/API',
-    });
+    // const disableLambdaParam = new cdk.CfnParameter(this, 'DisableLambda', {
+    //   type: 'String',
+    //   allowedValues: ['true', 'false'],
+    //   default: String(props.disableLambda ?? false),
+    //   description: 'Set to true to skip creation of example lambda/API',
+    // });
 
-    const lambdaVersionKeyParam = new cdk.CfnParameter(this, 'LambdaVersionKey', {
-      type: 'String',
-      default: props.lambdaVersionKey ?? 'v1',
-      description: 'Key used to force lambda redeploys when code changes',
-    });
+    // const lambdaVersionKeyParam = new cdk.CfnParameter(this, 'LambdaVersionKey', {
+    //   type: 'String',
+    //   default: props.lambdaVersionKey ?? 'v1',
+    //   description: 'Key used to force lambda redeploys when code changes',
+    // });
 
-    const domainNameParam = new cdk.CfnParameter(this, 'DomainName', {
-      type: 'String',
-      default: props.domainName ?? '',
-      description: 'Optional alternate domain for the CloudFront distribution',
-    });
+    // const domainNameParam = new cdk.CfnParameter(this, 'DomainName', {
+    //   type: 'String',
+    //   default: props.domainName ?? '',
+    //   description: 'Optional alternate domain for the CloudFront distribution',
+    // });
 
-    const certificateArnParam = new cdk.CfnParameter(this, 'CertificateArn', {
-      type: 'String',
-      default: props.certificateArn ?? '',
-      description: 'If providing domainName, optionally supply an ACM cert ARN',
-    });
+    // const certificateArnParam = new cdk.CfnParameter(this, 'CertificateArn', {
+    //   type: 'String',
+    //   default: props.certificateArn ?? '',
+    //   description: 'If providing domainName, optionally supply an ACM cert ARN',
+    // });
 
     // optional example lambda + API; can be skipped during testing
     // parameter for the API key that CloudFront will attach to requests.
@@ -84,11 +88,11 @@ export class CdkStack extends cdk.Stack {
 
     // derive runtime values: props take precedence, then parameters, then
     // defaults / context
-    const prefix = props.prefix ?? (prefixParam.valueAsString || scope.node.tryGetContext('prefix'));
-    const disableLambda = props.disableLambda ?? (disableLambdaParam.valueAsString === 'true');
-    const lambdaVersionKey = props.lambdaVersionKey ?? lambdaVersionKeyParam.valueAsString ?? 'v1';
-    const domainName = props.domainName ?? (domainNameParam.valueAsString || undefined);
-    const certificateArn = props.certificateArn ?? (certificateArnParam.valueAsString || undefined);
+    // const prefix = props.prefix ?? (prefixParam.valueAsString || scope.node.tryGetContext('prefix'));
+    // const disableLambda = props.disableLambda ?? (disableLambdaParam.valueAsString === 'true');
+    // const lambdaVersionKey = props.lambdaVersionKey ?? lambdaVersionKeyParam.valueAsString ?? 'v1';
+    // const domainName = props.domainName ?? (domainNameParam.valueAsString || undefined);
+    // const certificateArn = props.certificateArn ?? (certificateArnParam.valueAsString || undefined);
     const apiKeyVal = props.apiKey ?? apiKeyParam.valueAsString ?? 'test-api-key';
 
     // prefix and account id are now available for the rest of the stack
@@ -101,15 +105,15 @@ export class CdkStack extends cdk.Stack {
     // S3 bucket to hold media files
     this.bucket = new s3.Bucket(this, 'MediaBucket', {
       bucketName: withAccountId('media-bucket'),
-      removalPolicy: cdk.RemovalPolicy.DESTROY,
-      autoDeleteObjects: true,
+      removalPolicy: cdk.RemovalPolicy.RETAIN,
+      // autoDeleteObjects: true,
     });
 
     // front-end asset bucket (served via CloudFront)
     const assetBucket = new s3.Bucket(this, 'AssetBucket', {
       bucketName: withAccountId('asset-bucket'),
-      removalPolicy: cdk.RemovalPolicy.DESTROY,
-      autoDeleteObjects: true,
+      removalPolicy: cdk.RemovalPolicy.RETAIN,
+      // autoDeleteObjects: true,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
       // blockPublicAccess: new s3.BlockPublicAccess({
       //   blockPublicAcls: true,
@@ -132,7 +136,7 @@ export class CdkStack extends cdk.Stack {
       userPoolName: withPrefix('user-pool'),
       selfSignUpEnabled: false,
       signInAliases: { username: true, email: true },
-      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      removalPolicy: cdk.RemovalPolicy.RETAIN,
     });
 
     this.userPoolClient = this.userPool.addClient('web-client', {
