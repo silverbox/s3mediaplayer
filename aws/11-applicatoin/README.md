@@ -18,6 +18,8 @@ mkdir 11-applicatoin && cd 11-applicatoin && cdk init app --language typescript
 
 スタック名はコンテキスト、それ以外をパラメーターで渡す
 cd 11-application
+
+lambda layer用にnpm install
 cd lambda/layers/aws-sdk-layer/nodejs && npm install && cd ../../../..
 
 cdk deploy -c prefix=foo-bar-mediaplayer \
@@ -30,3 +32,4 @@ cdk deploy -c prefix=foo-bar-mediaplayer \
   --parameters DomainName=s3playerv2.hogehoge.fugafuga.com \
   --parameters CertificateArn=arn:aws:acm:us-east-1:999999999999:certificate/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxx
 
+実行後、手動でCloudFrontからのOACポリシーをasset用バケットに設定する。

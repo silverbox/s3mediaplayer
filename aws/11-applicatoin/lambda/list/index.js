@@ -36,23 +36,28 @@ exports.handler = async (event) => {
     };
   }
   const basePrefix = `${identityId}/`;
+  // accept optional prefix query param (relative to identity root)
+  const requested = event.queryStringParameters?.prefix || '';
+  const requestedNormalized = requested ? (requested.endsWith('/') ? requested : requested + '/') : '';
+  const fullPrefix = basePrefix + requestedNormalized;
+
   const params = {
     Bucket: bucket,
-    Prefix: basePrefix,
+    Prefix: fullPrefix,
     Delimiter: '/',       // only list immediate children
   };
   const data = await s3.listObjectsV2(params).promise();
 
   // folders are returned in CommonPrefixes
   const folders = (data.CommonPrefixes || []).map(cp => {
-    // exclude basePrefix from the path
-    return cp.Prefix.substring(basePrefix.length);
+    // exclude the fullPrefix from the returned path so clients get relative names
+    return cp.Prefix.substring(fullPrefix.length);
   });
 
   // objects are in Contents; filter out the folder placeholder if any
   const objects = (data.Contents || [])
-    .filter(o => o.Key !== basePrefix)
-    .map(o => o.Key.substring(basePrefix.length)); // exclude basePrefix from the path
+    .filter(o => o.Key !== fullPrefix)
+    .map(o => o.Key.substring(fullPrefix.length)); // exclude fullPrefix from the path
 
   return { 
     statusCode: 200,

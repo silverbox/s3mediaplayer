@@ -32,6 +32,8 @@ Amplify.configure({
 function App() {
   const [files, setFiles] = useState<string[]>([]);
   const [folders, setFolders] = useState<string[]>([]);
+  // current folder relative to the user's identity (e.g. "" or "music/" or "music/album/")
+  const [currentFolder, setCurrentFolder] = useState<string>('');
   // currently playing filename (from the files list)
   const [currentFile, setCurrentFile] = useState<string>('');
   // URL for the currently selected audio file (if any)
@@ -96,22 +98,15 @@ function App() {
       return;
     }
     const currentIdentityId = credentials.identityId;
-    
-    // filenameからIdentity IDを抽出して比較
-    const filenameIdentityId = filename.split('/')[0];
-    
-    if (currentIdentityId !== filenameIdentityId) {
-      console.error(`Identity IDが一致しません ${currentIdentityId} !== ${filenameIdentityId}`);
-      return;
-    }
+    // build the S3 key using the identityId + currentFolder + filename
+    const keyPrefix = currentFolder ? `${currentFolder}` : '';
+    const key = `${currentIdentityId}/${keyPrefix}${filename}`;
 
-    var s3 = new AWS.S3({
-      params: { Bucket: process.env.REACT_APP_S3_BUCKET }
-    });
-    
-    s3.getSignedUrl('getObject', { 
-      Key: filename,
-      Expires: 3600 
+    var s3 = new AWS.S3({ params: { Bucket: process.env.REACT_APP_S3_BUCKET } });
+
+    s3.getSignedUrl('getObject', {
+      Key: key,
+      Expires: 3600
     }, function (err, url) {
       if (err) {
         console.error('署名付きURL生成エラー:', err);
@@ -146,33 +141,25 @@ function App() {
   useEffect(() => {
     const apiUrl = process.env.REACT_APP_API_URL || '';
 
-    // when the user is signed in Amplify stores their tokens;
-    // we need to include an Authorization header so the API Gateway
-    // authorizer can inject the Cognito identity claims into the
-    // request context that your Lambda relies on.
-    
     const fetchWithAuth = async () => {
       try {
-        // get a valid session (refreshes if necessary)
         const idToken = await getIdToken();
         if (!idToken) {
           console.error('ID token is not available');
           return;
         }
 
-        const res = await fetch(apiUrl + '/list/', {
-          headers: {
-            Authorization: idToken,
-          },
+        // include optional prefix query param to request a subfolder
+        const prefixParam = currentFolder ? `?prefix=${encodeURIComponent(currentFolder)}` : '';
+        const res = await fetch(apiUrl + '/list' + prefixParam, {
+          headers: { Authorization: idToken },
         });
         const data = await res.json();
 
-        // lambda now returns { folders, objects }
         if (data && typeof data === 'object') {
           setFolders(Array.isArray(data.folders) ? data.folders : []);
           setFiles(Array.isArray(data.objects) ? data.objects : []);
         } else {
-          // fallback for legacy responses
           setFiles(Array.isArray(data) ? data : []);
           setFolders([]);
         }
@@ -182,7 +169,22 @@ function App() {
     };
 
     fetchWithAuth();
-  }, []);
+  }, [currentFolder]);
+
+  const handleFolderClick = (folder: string) => {
+    // folder usually ends with '/'
+    setCurrentFolder((prev) => `${prev || ''}${folder}`);
+  };
+
+  const goUp = () => {
+    if (!currentFolder) return;
+    // remove trailing slash then drop last segment
+    const trimmed = currentFolder.replace(/\/+$/, '');
+    const parts = trimmed.split('/');
+    parts.pop();
+    const next = parts.length > 0 ? parts.join('/') + '/' : '';
+    setCurrentFolder(next);
+  };
 
   return (
     <ThemeProvider>
@@ -198,12 +200,20 @@ function App() {
               {/* TODO: display files and upload/download UI */}
               <section>
                         <h4>Your folders</h4>
+                <div className="folder-header">
+                  <strong>Current:</strong> {currentFolder || 'root'}
+                  {currentFolder && (
+                    <button className="up-button" onClick={goUp} style={{marginLeft:8}}>Up</button>
+                  )}
+                </div>
                 {folders.length === 0 ? (
                   <p>No folders found</p>
                 ) : (
                   <ul>
                     {folders.map((d) => (
-                      <li key={d}>{d}</li>
+                      <li key={d}>
+                        <button className="folder-button" onClick={() => handleFolderClick(d)}>{d}</button>
+                      </li>
                     ))}
                   </ul>
                 )}
