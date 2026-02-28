@@ -18,4 +18,5 @@ yarn-error.log*
 # misc
 .DS_Store
 .vscode
-}
+
+command_memo.txt

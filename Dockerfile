@@ -10,4 +10,4 @@ RUN curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2
 RUN unzip awscliv2.zip
 RUN ./aws/install
 
-CMD ["cd frontend && npm install && cd ../cdk && npm install"]
+CMD ["cd frontend && npm install && cd ../aws/01-persistent && npm install && cd ../aws/11-application && npm install && cd lambda/layers/aws-sdk-layer/nodejs && npm install && cd /workspace"]
