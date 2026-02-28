@@ -160,7 +160,7 @@ function App() {
           return;
         }
 
-        const res = await fetch(apiUrl + '/', {
+        const res = await fetch(apiUrl + '/list/', {
           headers: {
             Authorization: idToken,
           },
