@@ -29,7 +29,34 @@ Amplify.configure({
   },
 } as any);
 
-function App() {
+const getIdToken = async (): Promise<string | null> => {
+  try {
+    const session = await fetchAuthSession();
+    if (!session) {
+      console.error('Session is not valid');
+      return null;
+    }
+    if (!session.tokens) {
+      console.error('Session tokens are not available');
+      return null;
+    }
+    if (!session.tokens.idToken) {
+      console.error('Session idToken is not available');
+      return null;
+    }
+    return session.tokens.idToken.toString();
+  } catch (err) {
+    console.error('failed to get ID token', err);
+    return null;
+  }
+};
+
+interface AuthenticatedContentProps {
+  signOut?: (data?: any) => void;
+  user: any;
+}
+
+function AuthenticatedContent({ signOut, user }: AuthenticatedContentProps) {
   const [files, setFiles] = useState<string[]>([]);
   const [folders, setFolders] = useState<string[]>([]);
   // current folder relative to the user's identity (e.g. "" or "music/" or "music/album/")
@@ -116,28 +143,6 @@ function App() {
     });
   };
 
-  const getIdToken = async (): Promise<string | null> => {
-    try {
-      const session = await fetchAuthSession();
-      if (!session) {
-        console.error('Session is not valid');
-        return null;
-      }
-      if (!session.tokens) {
-        console.error('Session tokens are not available');
-        return null;
-      }
-      if (!session.tokens.idToken) {
-        console.error('Session idToken is not available');
-        return null;
-      }
-      return session.tokens.idToken.toString();
-    } catch (err) {
-      console.error('failed to get ID token', err);
-      return null;
-    }
-  };
-
   useEffect(() => {
     const apiUrl = process.env.REACT_APP_API_URL || '';
 
@@ -169,7 +174,7 @@ function App() {
     };
 
     fetchWithAuth();
-  }, [currentFolder]);
+  }, [currentFolder, user]);
 
   const handleFolderClick = (folder: string) => {
     // folder usually ends with '/'
@@ -187,74 +192,80 @@ function App() {
   };
 
   return (
+    <View className="App">
+      <header className="App-header">
+        <Heading level={3}>Welcome, {user?.username}</Heading>
+        <button onClick={() => signOut?.()}>Sign out</button>
+      </header>
+      <main>
+        {/* TODO: display files and upload/download UI */}
+        <section>
+          <h4>Your folders</h4>
+          <div className="folder-header">
+            <strong>Current:</strong> {currentFolder || 'root'}
+            {currentFolder && (
+              <button className="up-button" onClick={goUp} style={{marginLeft:8}}>Up</button>
+            )}
+          </div>
+          {folders.length === 0 ? (
+            <p>No folders found</p>
+          ) : (
+            <ul>
+              {folders.map((d) => (
+                <li key={d}>
+                  <button className="folder-button" onClick={() => handleFolderClick(d)}>{d}</button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+
+        <section>
+          <h4>Your files</h4>
+          {files.length === 0 ? (
+            <p>No files found</p>
+          ) : (
+            <ul>
+              {files.map((f) => {
+                const isAudio = /\.(mp3|wav|ogg|m4a)$/i.test(f);
+                return (
+                  <li key={f}>
+                    {isAudio ? (
+                      <button
+                        className="file-button"
+                        onClick={() => handlePlay(f)}
+                      >
+                        {f}
+                      </button>
+                    ) : (
+                      f
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+          {/* audio player section */}
+          {audioUrl && (
+            <div className="audio-player">
+              <audio controls autoPlay src={audioUrl} onEnded={playRandom}>
+                Your browser does not support the audio element.
+              </audio>
+            </div>
+          )}
+        </section>
+      </main>
+    </View>
+  );
+}
+
+function App() {
+  return (
     <ThemeProvider>
       {/* signup disabled since Cognito self‑sign‑up is turned off */}
       <Authenticator hideSignUp>
         {({ signOut, user }) => (
-          <View className="App">
-            <header className="App-header">
-              <Heading level={3}>Welcome, {user?.username}</Heading>
-              <button onClick={signOut}>Sign out</button>
-            </header>
-            <main>
-              {/* TODO: display files and upload/download UI */}
-              <section>
-                        <h4>Your folders</h4>
-                <div className="folder-header">
-                  <strong>Current:</strong> {currentFolder || 'root'}
-                  {currentFolder && (
-                    <button className="up-button" onClick={goUp} style={{marginLeft:8}}>Up</button>
-                  )}
-                </div>
-                {folders.length === 0 ? (
-                  <p>No folders found</p>
-                ) : (
-                  <ul>
-                    {folders.map((d) => (
-                      <li key={d}>
-                        <button className="folder-button" onClick={() => handleFolderClick(d)}>{d}</button>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </section>
-
-              <section>
-                        <h4>Your files</h4>
-                {files.length === 0 ? (
-                  <p>No files found</p>
-                ) : (
-                  <ul>
-                    {files.map((f) => {
-                      const isAudio = /\.(mp3|wav|ogg|m4a)$/i.test(f);
-                      return (
-                        <li key={f}>
-                          {isAudio ? (
-                            <button
-                              className="file-button"
-                              onClick={() => handlePlay(f)}
-                            >
-                              {f}
-                            </button>
-                          ) : (
-                            f
-                          )}
-                        </li>
-                      );
-                    })}
-                  </ul>
-                )}
-                {/* audio player section */}
-                {audioUrl && (
-                  <div className="audio-player">
-                    <audio controls autoPlay src={audioUrl} onEnded={playRandom}>
-                      Your browser does not support the audio element.
-                    </audio>
-                  </div>
-                )}
-              </section>
-            </main>
-          </View>
+          <AuthenticatedContent signOut={signOut} user={user} />
         )}
       </Authenticator>
     </ThemeProvider>
