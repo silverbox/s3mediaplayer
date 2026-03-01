@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { Authenticator, ThemeProvider, View, Heading } from '@aws-amplify/ui-react';
 import '@aws-amplify/ui-react/styles.css';
 import { Amplify } from 'aws-amplify';
@@ -143,38 +143,38 @@ function AuthenticatedContent({ signOut, user }: AuthenticatedContentProps) {
     });
   };
 
-  useEffect(() => {
+  const fetchFileList = useCallback(async () => {
     const apiUrl = process.env.REACT_APP_API_URL || '';
 
-    const fetchWithAuth = async () => {
-      try {
-        const idToken = await getIdToken();
-        if (!idToken) {
-          console.error('ID token is not available');
-          return;
-        }
-
-        // include optional prefix query param to request a subfolder
-        const prefixParam = currentFolder ? `?prefix=${encodeURIComponent(currentFolder)}` : '';
-        const res = await fetch(apiUrl + '/list' + prefixParam, {
-          headers: { Authorization: idToken },
-        });
-        const data = await res.json();
-
-        if (data && typeof data === 'object') {
-          setFolders(Array.isArray(data.folders) ? data.folders : []);
-          setFiles(Array.isArray(data.objects) ? data.objects : []);
-        } else {
-          setFiles(Array.isArray(data) ? data : []);
-          setFolders([]);
-        }
-      } catch (err) {
-        console.error('failed to list files', err);
+    try {
+      const idToken = await getIdToken();
+      if (!idToken) {
+        console.error('ID token is not available');
+        return;
       }
-    };
 
-    fetchWithAuth();
-  }, [currentFolder, user]);
+      // include optional prefix query param to request a subfolder
+      const prefixParam = currentFolder ? `?prefix=${encodeURIComponent(currentFolder)}` : '';
+      const res = await fetch(apiUrl + '/list' + prefixParam, {
+        headers: { Authorization: idToken },
+      });
+      const data = await res.json();
+
+      if (data && typeof data === 'object') {
+        setFolders(Array.isArray(data.folders) ? data.folders : []);
+        setFiles(Array.isArray(data.objects) ? data.objects : []);
+      } else {
+        setFiles(Array.isArray(data) ? data : []);
+        setFolders([]);
+      }
+    } catch (err) {
+      console.error('failed to list files', err);
+    }
+  }, [currentFolder]);
+
+  useEffect(() => {
+    fetchFileList();
+  }, [currentFolder, user, fetchFileList]);
 
   const handleFolderClick = (folder: string) => {
     // folder usually ends with '/'
@@ -206,6 +206,7 @@ function AuthenticatedContent({ signOut, user }: AuthenticatedContentProps) {
             {currentFolder && (
               <button className="up-button" onClick={goUp} style={{marginLeft:8}}>Up</button>
             )}
+            <button className="refresh-button" onClick={fetchFileList} style={{marginLeft:8}}>Refresh</button>
           </div>
           {folders.length === 0 ? (
             <p>No folders found</p>
