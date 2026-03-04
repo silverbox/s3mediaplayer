@@ -249,6 +249,12 @@ function AuthenticatedContent({ signOut, user }: AuthenticatedContentProps) {
           {/* audio player section */}
           {audioUrl && (
             <div className="audio-player">
+              {/* show current file name while playing */}
+              {currentFile && (
+                <div className="current-file">
+                  Now playing: <strong>{currentFile}</strong>
+                </div>
+              )}
               <audio controls autoPlay src={audioUrl} onEnded={playRandom}>
                 Your browser does not support the audio element.
               </audio>
