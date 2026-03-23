@@ -31,6 +31,21 @@
 .App main {
   padding: 1rem;
   flex: 1 1 auto;
+  overflow-y: auto;
+  margin-bottom: 100px; /* leave space for fixed audio player */
+}
+
+/* make the audio player fixed at the bottom and keep list scrolling */
+.audio-player {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: #fff;
+  border-top: 1px solid #ccc;
+  padding: 0.75rem 1rem;
+  box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.1);
+  z-index: 1000;
 }
 
 /* make the welcome heading less dominant so file list is visible */
